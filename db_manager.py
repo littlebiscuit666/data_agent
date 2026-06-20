@@ -303,6 +303,8 @@ def _install_readonly_authorizer(conn):
     }
 
     def authorizer(action, arg1, arg2, dbname, source):
+        if action == sqlite3.SQLITE_PRAGMA and str(arg1).lower() in {"table_info", "table_xinfo"}:
+            return sqlite3.SQLITE_OK
         if action in denied_actions:
             return sqlite3.SQLITE_DENY
         return sqlite3.SQLITE_OK

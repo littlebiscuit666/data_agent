@@ -21,6 +21,7 @@ def run_sql_safety_tests():
 
     valid_queries = [
         "SELECT * FROM customers LIMIT 1",
+        "SELECT COUNT(*) AS column_count FROM pragma_table_info('customers')",
         "WITH top_customers AS (SELECT customer_id, total_amount FROM orders LIMIT 3) SELECT * FROM top_customers",
     ]
     for query in valid_queries:
