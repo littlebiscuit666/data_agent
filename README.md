@@ -37,14 +37,14 @@ data_agent/
 
 ## 🛠️ Setup & Installation
 
-### Prerequites
+### Prerequisites
 * Python 3.10 to 3.14
 * DeepSeek API Key
 
 ### Step 1: Clone and Navigate
-Navigate into the project directory:
+Navigate into the application directory that contains `server.py`, `config.py`, and `requirements.txt`:
 ```bash
-cd data_agent
+cd data-agent/data_agent
 ```
 
 ### Step 2: Set up Virtual Environment & Install Dependencies
@@ -56,12 +56,15 @@ pip install -r requirements.txt
 ```
 
 ### Step 3: Configure Environment Variables
-Create a `.env` file in the `data_agent` folder and add your DeepSeek API key:
+Create a `.env` file in the `data_agent` folder next to `server.py` and `config.py`, then add your DeepSeek API key:
 ```env
 DEEPSEEK_API_KEY=your_actual_deepseek_api_key
 DEEPSEEK_API_BASE=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 ```
+
+### SQL Safety Note
+Generated SQL is executed through a read-only SQLite connection. The backend only accepts one read-only `SELECT` statement, or one read-only `WITH ... SELECT` statement, and rejects write or schema-changing commands.
 
 ---
 

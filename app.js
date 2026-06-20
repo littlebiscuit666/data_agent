@@ -346,7 +346,8 @@ document.addEventListener('DOMContentLoaded', () => {
       mlMetricTrend.textContent = mlResult.metrics.direction === 'upward' ? '增长趋势 📈' : '下降趋势 📉';
       mlMetricTrend.className = 'metric-value ' + (mlResult.metrics.direction === 'upward' ? 'color-success' : 'color-danger');
       
-      mlTableTitle.textContent = "未来30天趋势预测数据";
+      const forecastDays = Array.isArray(mlResult.forecast) ? mlResult.forecast.length : 0;
+      mlTableTitle.textContent = `未来${forecastDays}天趋势预测数据`;
       
       // Draw Forecast headers
       ['日期/时间', '预测值'].forEach(headerText => {

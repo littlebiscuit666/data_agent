@@ -6,7 +6,7 @@ import numpy as np
 from typing import TypedDict, List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from config import llm
+from config import get_llm
 from db_manager import execute_query, get_schema_info, get_connection
 
 # Define Graph State
@@ -24,6 +24,51 @@ class AgentState(TypedDict):
     error: Optional[str]
     retry_count: int
     logs: List[str]
+
+VALID_INTENTS = {"sql", "ml_forecast", "ml_segmentation", "conversational"}
+
+
+def create_initial_state(query: str, schema: Optional[str] = None) -> AgentState:
+    """Creates a complete initial state for every LangGraph invocation."""
+    return {
+        "query": query,
+        "intent": "sql",
+        "ml_params": {},
+        "sql_query": None,
+        "data": None,
+        "columns": None,
+        "schema": schema if schema is not None else get_schema_info(),
+        "chart_config": None,
+        "ml_result": None,
+        "conversational_response": None,
+        "error": None,
+        "retry_count": 0,
+        "logs": []
+    }
+
+
+def parse_int_param(params: Dict[str, Any], key: str, default: int, min_value: int, max_value: int, logs: Optional[List[str]] = None) -> int:
+    """Parses an integer ML parameter with safe defaults and clamping."""
+    raw_value = params.get(key) if isinstance(params, dict) else None
+    value = default
+
+    try:
+        if isinstance(raw_value, bool) or raw_value is None:
+            raise ValueError
+        if isinstance(raw_value, str):
+            raw_value = raw_value.strip()
+            if not re.fullmatch(r"[-+]?\d+", raw_value):
+                raise ValueError
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        if logs is not None and raw_value not in (None, ""):
+            logs.append(f"Invalid parameter {key}={raw_value!r}; using default {default}.")
+        value = default
+
+    clamped = max(min_value, min(max_value, value))
+    if logs is not None and clamped != value:
+        logs.append(f"Parameter {key}={value} was clamped to {clamped}.")
+    return clamped
 
 # Clean json parser helper
 def parse_json_from_llm(content: str) -> Dict[str, Any]:
@@ -91,7 +136,7 @@ def route_intent(state: AgentState) -> AgentState:
     """
     
     try:
-        response = llm.invoke(prompt)
+        response = get_llm().invoke(prompt)
         res_json = parse_json_from_llm(response.content)
         intent = res_json.get("intent", "sql")
         ml_params = res_json.get("ml_params", {})
@@ -99,7 +144,14 @@ def route_intent(state: AgentState) -> AgentState:
         intent = "sql"
         ml_params = {}
         logs.append(f"Intent parsing failed: {e}. Defaulting to 'sql'")
-        
+
+    if intent not in VALID_INTENTS:
+        logs.append(f"Unknown intent '{intent}', defaulting to 'sql'.")
+        intent = "sql"
+    if not isinstance(ml_params, dict):
+        logs.append(f"Invalid ml_params type {type(ml_params).__name__}; using empty params.")
+        ml_params = {}
+
     logs.append(f"Determined intent: {intent}, params: {ml_params}")
     return {
         **state,
@@ -155,7 +207,7 @@ def generate_sql(state: AgentState) -> AgentState:
     """
     
     try:
-        response = llm.invoke(prompt)
+        response = get_llm().invoke(prompt)
         res_json = parse_json_from_llm(response.content)
         sql_query = res_json.get("sql")
         explanation = res_json.get("explanation", "")
@@ -187,6 +239,7 @@ def execute_sql(state: AgentState) -> AgentState:
         return {
             **state,
             "error": "No SQL query generated to execute.",
+            "retry_count": state.get("retry_count", 0) + 1,
             "logs": logs
         }
         
@@ -272,7 +325,7 @@ def generate_visualization(state: AgentState) -> AgentState:
     """
     
     try:
-        response = llm.invoke(prompt)
+        response = get_llm().invoke(prompt)
         chart_config = parse_json_from_llm(response.content)
         logs.append(f"Chart.js configuration generated. Chart type: {chart_config.get('type', 'none')}")
         return {
@@ -304,7 +357,7 @@ def conversational_node(state: AgentState) -> AgentState:
     """
     
     try:
-        response = llm.invoke(prompt)
+        response = get_llm().invoke(prompt)
         return {
             **state,
             "conversational_response": response.content,
@@ -380,8 +433,7 @@ def run_ml_analysis(state: AgentState) -> AgentState:
             
             # Get forecast days from params
             ml_params = state.get("ml_params") or {}
-            forecast_days = int(ml_params.get("forecast_days", 30))
-            forecast_days = max(5, min(180, forecast_days)) # Clip between 5 and 180
+            forecast_days = parse_int_param(ml_params, "forecast_days", 30, 5, 180, logs)
             logs.append(f"Forecasting future {forecast_days} days...")
             
             # Predict future days
@@ -505,11 +557,11 @@ def run_ml_analysis(state: AgentState) -> AgentState:
             
             # Fit KMeans (dynamic clusters)
             ml_params = state.get("ml_params") or {}
-            n_clusters = int(ml_params.get("num_clusters", 3))
-            n_clusters = max(2, min(6, n_clusters)) # Clip between 2 and 6
+            n_clusters = parse_int_param(ml_params, "num_clusters", 3, 2, 6, logs)
+            n_clusters = min(n_clusters, len(df))
             logs.append(f"Fitting KMeans model with {n_clusters} clusters...")
-            
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
             df["cluster"] = kmeans.fit_predict(X_scaled)
             
             # 3. Label Clusters dynamically based on mean total_spent
@@ -592,7 +644,7 @@ def run_ml_analysis(state: AgentState) -> AgentState:
                         }
                     },
                     "plugins": {
-                        "title": { "display": True, "text": "Customer Segmentation (K-Means Clustering)" },
+                        "title": { "display": True, "text": f"Customer Segmentation (K-Means, K={n_clusters})" },
                         "tooltip": {
                             "callbacks": {
                                 "label": "function(context) { return context.dataset.label + ': ' + context.raw.label + ' (Orders: ' + context.raw.x + ', Spent: $' + context.raw.y + ')'; }"
@@ -609,10 +661,10 @@ def run_ml_analysis(state: AgentState) -> AgentState:
                 
             ml_result = {
                 "success": True,
-                "model_type": "K-Means Clustering Analysis (K=3)",
+                "model_type": f"K-Means Clustering Analysis (K={n_clusters})",
                 "centroids": centroids,
                 "customers": customers_list,
-                "summary": f"Clustered customers into 3 behavioral segments: " +
+                "summary": f"Clustered customers into {n_clusters} behavioral segments: " +
                            ", ".join([f"{c['label']} ({c['size']} customers)" for c in centroids]) + "."
             }
             
@@ -709,20 +761,7 @@ if __name__ == "__main__":
     graph = build_workflow()
     
     # Let's run a test state
-    initial_state = {
-        "query": "Show me total page views in web_traffic table",
-        "intent": "sql",
-        "sql_query": None,
-        "data": None,
-        "columns": None,
-        "schema": get_schema_info(),
-        "chart_config": None,
-        "ml_result": None,
-        "conversational_response": None,
-        "error": None,
-        "retry_count": 0,
-        "logs": []
-    }
+    initial_state = create_initial_state("Show me total page views in web_traffic table")
     
     print("Running graph invocation test...")
     res = graph.invoke(initial_state)

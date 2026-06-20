@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import uvicorn
 
 from db_manager import init_db, get_schema_info, get_connection
-from agent_graph import build_workflow
+from agent_graph import build_workflow, create_initial_state
 
 # Initialize database on start
 init_db(force=False)
@@ -73,20 +73,7 @@ async def execute_agent_query(request: QueryRequest):
     raw_schema = get_schema_info()
     
     # Setup initial state
-    initial_state = {
-        "query": request.query,
-        "intent": "sql",
-        "sql_query": None,
-        "data": None,
-        "columns": None,
-        "schema": raw_schema,
-        "chart_config": None,
-        "ml_result": None,
-        "conversational_response": None,
-        "error": None,
-        "retry_count": 0,
-        "logs": []
-    }
+    initial_state = create_initial_state(request.query, raw_schema)
     
     try:
         # Invoke LangGraph

@@ -1,4 +1,5 @@
 import sqlite3
+import re
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -6,8 +7,10 @@ import os
 
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "cloud_mock.db"))
 
-def get_connection():
+def get_connection(readonly=False):
     """Returns a connection to the SQLite database."""
+    if readonly:
+        return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     return sqlite3.connect(DB_PATH)
 
 def init_db(force=False):
@@ -240,18 +243,89 @@ def get_schema_info():
     conn.close()
     return schema_str
 
+def validate_readonly_sql(sql_query: str):
+    """Validates that SQL is a single read-only SELECT or WITH...SELECT statement."""
+    if not isinstance(sql_query, str):
+        return False, "SQL query must be a string."
+
+    query = sql_query.strip()
+    if not query:
+        return False, "SQL query cannot be empty."
+
+    # Remove one trailing semicolon, then reject remaining semicolons as multi-statement input.
+    query_without_trailing = query[:-1].strip() if query.endswith(";") else query
+    if ";" in query_without_trailing:
+        return False, "Only a single read-only SQL statement is allowed."
+
+    normalized = re.sub(r"\s+", " ", query_without_trailing).strip().lower()
+    if not normalized:
+        return False, "SQL query cannot be empty."
+
+    first_word_match = re.match(r"^[a-z_]+", normalized)
+    first_word = first_word_match.group(0) if first_word_match else ""
+
+    if first_word == "select":
+        return True, None
+
+    if first_word == "with":
+        blocked_in_cte = re.search(
+            r"\b(insert|update|delete|drop|create|alter|replace|truncate|attach|detach|vacuum|pragma|explain)\b",
+            normalized,
+        )
+        if blocked_in_cte:
+            return False, f"Query contains forbidden statement: '{blocked_in_cte.group(1)}'."
+        if not re.search(r"\)\s*select\b", normalized):
+            return False, "WITH queries must end in a read-only SELECT statement."
+        return True, None
+
+    return False, "Only single SELECT or read-only WITH...SELECT statements are allowed."
+
+
+def _install_readonly_authorizer(conn):
+    """Installs a SQLite authorizer that denies writes and schema/file operations."""
+    denied_actions = {
+        sqlite3.SQLITE_INSERT,
+        sqlite3.SQLITE_UPDATE,
+        sqlite3.SQLITE_DELETE,
+        sqlite3.SQLITE_DROP_TABLE,
+        sqlite3.SQLITE_DROP_INDEX,
+        sqlite3.SQLITE_DROP_VIEW,
+        sqlite3.SQLITE_DROP_TRIGGER,
+        sqlite3.SQLITE_CREATE_TABLE,
+        sqlite3.SQLITE_CREATE_INDEX,
+        sqlite3.SQLITE_CREATE_VIEW,
+        sqlite3.SQLITE_CREATE_TRIGGER,
+        sqlite3.SQLITE_ALTER_TABLE,
+        sqlite3.SQLITE_ATTACH,
+        sqlite3.SQLITE_DETACH,
+        sqlite3.SQLITE_TRANSACTION,
+        sqlite3.SQLITE_PRAGMA,
+    }
+
+    def authorizer(action, arg1, arg2, dbname, source):
+        if action in denied_actions:
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    conn.set_authorizer(authorizer)
+
+
 def execute_query(sql_query: str):
-    """Executes a query safely. Blocks modifying statements (write actions)."""
-    # Simple block for write commands
-    forbidden = ["insert ", "update ", "delete ", "drop ", "create ", "alter ", "replace ", "truncate "]
-    query_lower = sql_query.lower().strip()
-    
-    for word in forbidden:
-        if query_lower.startswith(word) or f" {word}" in query_lower:
-            raise PermissionError(f"Query contains forbidden write statement: '{word}'")
-            
-    conn = get_connection()
+    """Executes a read-only query safely and returns a consistent result shape."""
+    conn = None
     try:
+        is_valid, error = validate_readonly_sql(sql_query)
+        if not is_valid:
+            return {
+                "success": False,
+                "data": [],
+                "columns": [],
+                "row_count": 0,
+                "error": error
+            }
+
+        conn = get_connection(readonly=True)
+        _install_readonly_authorizer(conn)
         df = pd.read_sql_query(sql_query, conn)
         # Convert nan/inf to None to prevent JSON serialization errors
         df = df.replace({np.nan: None, np.inf: None, -np.inf: None})
@@ -273,7 +347,8 @@ def execute_query(sql_query: str):
             "error": str(e)
         }
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
 if __name__ == "__main__":
     init_db(force=True)
