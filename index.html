@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antigravity - 智能数据分析与机器学习智能体</title>
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Google Fonts & Material Symbols -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="dark-theme">
+
+  <!-- App Shell -->
+  <div class="app-container">
+    
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-glow"></div>
+        <span class="material-symbols-outlined logo-icon">insights</span>
+        <span class="logo-title">Antigravity <span class="logo-sub">Data Agent</span></span>
+      </div>
+      
+      <div class="header-actions">
+        <div class="db-status-pill" id="db-status">
+          <span class="status-indicator online"></span>
+          <span class="status-text">Cloud DB Connected</span>
+        </div>
+        <button class="btn btn-secondary btn-icon" id="btn-reset-db" title="重置并重新填充模拟云端数据库">
+          <span class="material-symbols-outlined">restart_alt</span>
+          <span>Reset Database</span>
+        </button>
+      </div>
+    </header>
+    
+    <!-- Main Content Area -->
+    <div class="app-body">
+      
+      <!-- Left Sidebar: Database Schema & Examples -->
+      <aside class="app-sidebar">
+        
+        <!-- Schema Section -->
+        <div class="sidebar-section">
+          <div class="section-header">
+            <span class="material-symbols-outlined section-icon">schema</span>
+            <h3>云数据库架构 (SQLite)</h3>
+          </div>
+          <div class="schema-tree" id="schema-tree-container">
+            <div class="loading-spinner">读取架构中...</div>
+          </div>
+        </div>
+        
+        <!-- Quick Examples Section -->
+        <div class="sidebar-section">
+          <div class="section-header">
+            <span class="material-symbols-outlined section-icon">explore</span>
+            <h3>NL 自然语言提问推荐</h3>
+          </div>
+          <div class="example-list">
+            <button class="example-item" data-query="查看累计销售额最高的前5名客户">
+              <span class="material-symbols-outlined">person</span>
+              <span>查看销售额最高的前5名客户</span>
+            </button>
+            <button class="example-item" data-query="按月分析2024年的订单总金额趋势">
+              <span class="material-symbols-outlined">timeline</span>
+              <span>按月分析2024年销售额趋势</span>
+            </button>
+            <button class="example-item" data-query="对比不同国家客户的销售额占比">
+              <span class="material-symbols-outlined">pie_chart</span>
+              <span>对比不同国家的销售额占比</span>
+            </button>
+            <div class="divider">机器学习与数据分析 (可拓展)</div>
+            <button class="example-item ml-item" data-query="预测未来30天的网站独立访客数(unique_visitors)">
+              <span class="material-symbols-outlined">query_stats</span>
+              <span>预测未来30天网站访客量 (回归)</span>
+            </button>
+            <button class="example-item ml-item" data-query="预测未来30天的每日销售额趋势">
+              <span class="material-symbols-outlined">trending_up</span>
+              <span>预测未来30天每日销售额趋势</span>
+            </button>
+            <button class="example-item ml-item" data-query="使用机器学习K-Means算法对客户进行画像聚类分析">
+              <span class="material-symbols-outlined">diversity_3</span>
+              <span>对客户进行K-Means聚类画像 (聚类)</span>
+            </button>
+          </div>
+        </div>
+        
+      </aside>
+      
+      <!-- Right Main Panel: Input Chat and Workspace Tabs -->
+      <main class="app-main">
+        
+        <!-- Top Chat/Prompt Input Area -->
+        <section class="prompt-section">
+          <div class="chat-input-wrapper">
+            <span class="material-symbols-outlined chat-prefix-icon">smart_toy</span>
+            <input type="text" id="nl-query-input" placeholder="用自然语言向云端数据库提问，或要求进行机器学习预测..." autocomplete="off">
+            <button class="btn btn-primary" id="btn-submit-query">
+              <span>运行智能体</span>
+              <span class="material-symbols-outlined">arrow_forward</span>
+            </button>
+          </div>
+        </section>
+        
+        <!-- Workspace Area -->
+        <section class="workspace-section">
+          
+          <!-- Workspace Header Tabs -->
+          <div class="workspace-tabs">
+            <button class="tab-btn active" data-tab="tab-chart">
+              <span class="material-symbols-outlined">bar_chart</span>
+              <span>可视化图表</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-table">
+              <span class="material-symbols-outlined">table_chart</span>
+              <span>数据表格</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-sql">
+              <span class="material-symbols-outlined">terminal</span>
+              <span>SQL 与 Agent 日志</span>
+            </button>
+            <button class="tab-btn" id="tab-btn-ml" data-tab="tab-ml" style="display: none;">
+              <span class="material-symbols-outlined">psychology</span>
+              <span>ML 模型分析</span>
+            </button>
+          </div>
+          
+          <!-- Workspace Content Panes -->
+          <div class="workspace-content">
+            
+            <!-- Loading Indicator Overlay -->
+            <div class="loading-overlay" id="workspace-loading" style="display: none;">
+              <div class="loading-box">
+                <div class="glow-spinner"></div>
+                <p id="loading-message">智能体正在思考，并将自然语言转化为 SQL...</p>
+              </div>
+            </div>
+            
+            <!-- Empty State View -->
+            <div class="empty-state" id="workspace-empty">
+              <span class="material-symbols-outlined empty-icon">database_search</span>
+              <h3>欢迎使用 Antigravity 数据智能体</h3>
+              <p>在上方输入框键入您的问题，或点击左侧的推荐提问。智能体会自动提取 schema、生成 SQL、运行查询并生成可视化图表。</p>
+            </div>
+            
+            <!-- Tab: Chart Visualization -->
+            <div class="tab-pane active" id="tab-chart">
+              <div class="chart-container-wrapper">
+                <canvas id="agent-chart-canvas"></canvas>
+                <div class="no-chart-message" id="no-chart-alert" style="display: none;">
+                  <span class="material-symbols-outlined">info</span>
+                  <p>当前查询结果不适合生成图表。请查看“数据表格”或“SQL 与 Agent 日志”。</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Tab: Data Table -->
+            <div class="tab-pane" id="tab-table">
+              <div class="table-container-wrapper">
+                <table class="data-table" id="agent-data-table">
+                  <thead>
+                    <tr id="table-headers">
+                      <!-- Dynamically filled -->
+                    </tr>
+                  </thead>
+                  <tbody id="table-rows">
+                    <!-- Dynamically filled -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-meta" id="table-meta-info">
+                共 0 行数据
+              </div>
+            </div>
+            
+            <!-- Tab: SQL & Agent Logs -->
+            <div class="tab-pane" id="tab-sql">
+              <div class="sql-log-grid">
+                <!-- Left: SQL Query Code Block -->
+                <div class="sql-block">
+                  <div class="pane-title">
+                    <span class="material-symbols-outlined">code</span>
+                    <span>生成的 SQL 查询语句 (SQLite)</span>
+                  </div>
+                  <div class="code-container">
+                    <pre><code id="generated-sql-code">-- 暂无 SQL 生成</code></pre>
+                  </div>
+                </div>
+                
+                <!-- Right: Agent Reasoning Logs -->
+                <div class="log-block">
+                  <div class="pane-title">
+                    <span class="material-symbols-outlined">rule</span>
+                    <span>LangGraph 智能体思维日志</span>
+                  </div>
+                  <div class="log-container" id="agent-logs-list">
+                    <div class="log-item system">等待查询...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Tab: ML Model Analysis -->
+            <div class="tab-pane" id="tab-ml">
+              <div class="ml-pane-grid">
+                <!-- Model Metrics Summary -->
+                <div class="ml-card summary-card">
+                  <div class="card-header">
+                    <span class="material-symbols-outlined">analytics</span>
+                    <h4>模型评估与摘要</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="metric-row">
+                      <span class="metric-label">算法模型:</span>
+                      <span class="metric-value highlight" id="ml-model-type">-</span>
+                    </div>
+                    <div class="metric-row" id="row-r2">
+                      <span class="metric-label">拟合度 R²:</span>
+                      <span class="metric-value" id="ml-metric-r2">-</span>
+                    </div>
+                    <div class="metric-row" id="row-trend">
+                      <span class="metric-label">趋势方向:</span>
+                      <span class="metric-value" id="ml-metric-trend">-</span>
+                    </div>
+                    <div class="model-description" id="ml-model-desc">
+                      模型运行结果说明将在这里显示。
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- ML Model Detailed Table -->
+                <div class="ml-card detail-card">
+                  <div class="card-header">
+                    <span class="material-symbols-outlined">list_alt</span>
+                    <h4 id="ml-table-title">分析结果明细</h4>
+                  </div>
+                  <div class="table-container-wrapper">
+                    <table class="data-table" id="ml-data-table">
+                      <thead>
+                        <tr id="ml-table-headers">
+                          <!-- Filled dynamically -->
+                        </tr>
+                      </thead>
+                      <tbody id="ml-table-rows">
+                        <!-- Filled dynamically -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </section>
+        
+      </main>
+      
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
