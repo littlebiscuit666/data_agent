@@ -1,3 +1,13 @@
+---
+title: Data Agent
+emoji: 📊
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Antigravity Extensible Data Agent
 
 An agentic database analysis system that translates natural language queries into SQL, executes them against a cloud-like database, visualizes results, and performs machine learning tasks. Built with **LangGraph**, **FastAPI**, and **Chart.js**.

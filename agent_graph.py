@@ -1,6 +1,7 @@
 import json
 import re
 import os
+import asyncio
 import pandas as pd
 import numpy as np
 from typing import TypedDict, List, Dict, Any, Optional
@@ -100,7 +101,7 @@ def parse_json_from_llm(content: str) -> Dict[str, Any]:
         raise ValueError(f"Could not parse LLM output as JSON: {content}")
 
 # Node 1: Intent Router
-def route_intent(state: AgentState) -> AgentState:
+async def route_intent(state: AgentState) -> AgentState:
     query = state["query"]
     logs = state.get("logs", [])
     logs.append(f"Analyzing user query intent: '{query}'")
@@ -136,7 +137,7 @@ def route_intent(state: AgentState) -> AgentState:
     """
     
     try:
-        response = get_llm().invoke(prompt)
+        response = await get_llm().ainvoke(prompt)
         res_json = parse_json_from_llm(response.content)
         intent = res_json.get("intent", "sql")
         ml_params = res_json.get("ml_params", {})
@@ -161,7 +162,7 @@ def route_intent(state: AgentState) -> AgentState:
     }
 
 # Node 2: Text-to-SQL Generator (with self-correction logic)
-def generate_sql(state: AgentState) -> AgentState:
+async def generate_sql(state: AgentState) -> AgentState:
     # If we already have a success SQL and no new error, return
     if state.get("sql_query") and not state.get("error"):
         return state
@@ -207,7 +208,7 @@ def generate_sql(state: AgentState) -> AgentState:
     """
     
     try:
-        response = get_llm().invoke(prompt)
+        response = await get_llm().ainvoke(prompt)
         res_json = parse_json_from_llm(response.content)
         sql_query = res_json.get("sql")
         explanation = res_json.get("explanation", "")
@@ -266,7 +267,7 @@ def execute_sql(state: AgentState) -> AgentState:
         }
 
 # Node 4: Generate Visualization (Chart.js Config)
-def generate_visualization(state: AgentState) -> AgentState:
+async def generate_visualization(state: AgentState) -> AgentState:
     if state.get("error") or not state.get("data"):
         return state
         
@@ -325,7 +326,7 @@ def generate_visualization(state: AgentState) -> AgentState:
     """
     
     try:
-        response = get_llm().invoke(prompt)
+        response = await get_llm().ainvoke(prompt)
         chart_config = parse_json_from_llm(response.content)
         logs.append(f"Chart.js configuration generated. Chart type: {chart_config.get('type', 'none')}")
         return {
@@ -342,7 +343,7 @@ def generate_visualization(state: AgentState) -> AgentState:
         }
 
 # Node 5: Conversational Response Node
-def conversational_node(state: AgentState) -> AgentState:
+async def conversational_node(state: AgentState) -> AgentState:
     query = state["query"]
     logs = state.get("logs", [])
     logs.append("Routing to conversational response...")
@@ -357,7 +358,7 @@ def conversational_node(state: AgentState) -> AgentState:
     """
     
     try:
-        response = get_llm().invoke(prompt)
+        response = await get_llm().ainvoke(prompt)
         return {
             **state,
             "conversational_response": response.content,
@@ -764,7 +765,7 @@ if __name__ == "__main__":
     initial_state = create_initial_state("Show me total page views in web_traffic table")
     
     print("Running graph invocation test...")
-    res = graph.invoke(initial_state)
+    res = asyncio.run(graph.ainvoke(initial_state))
     print("\nLogs:")
     for log in res["logs"]:
         print(f" -> {log}")

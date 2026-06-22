@@ -1,0 +1,11 @@
+# Never bake secrets or local state into the image.
+.env
+.venv/
+__pycache__/
+*.pyc
+cloud_mock.db
+*.log
+.git/
+.gitignore
+Dockerfile
+.dockerignore

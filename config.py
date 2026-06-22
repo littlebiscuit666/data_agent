@@ -29,11 +29,12 @@ def get_llm() -> ChatOpenAI:
             "and add DEEPSEEK_API_KEY=your_actual_deepseek_api_key."
         )
 
-    # We configure a temperature of 0.75 for balanced creativity and consistency.
+    # Low temperature keeps intent routing, SQL, and chart config generation
+    # deterministic and reproducible instead of creatively varied.
     _llm = ChatOpenAI(
         api_key=api_key,
         base_url=api_base,
         model=model_name,
-        temperature=0.75,
+        temperature=0.1,
     )
     return _llm

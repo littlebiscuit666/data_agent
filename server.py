@@ -76,8 +76,8 @@ async def execute_agent_query(request: QueryRequest):
     initial_state = create_initial_state(request.query, raw_schema)
     
     try:
-        # Invoke LangGraph
-        result_state = graph.invoke(initial_state)
+        # Invoke LangGraph asynchronously so LLM I/O does not block the event loop.
+        result_state = await graph.ainvoke(initial_state)
         
         # Format clean response
         response = {
@@ -120,4 +120,6 @@ async def get_index():
 app.mount("/", StaticFiles(directory=workspace_dir), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+    # HF Spaces sets PORT=7860; locally defaults to 8000.
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)

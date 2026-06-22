@@ -1,5 +1,6 @@
 import os
 import sys
+import asyncio
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -71,7 +72,7 @@ def run_ml_unit_tests(schema_text):
     print("✅ ML segmentation unit tests passed.")
 
 
-def run_live_llm_tests(schema_text):
+async def run_live_llm_tests(schema_text):
     # These tests require a working DeepSeek API key and network access.
     if not os.getenv("DEEPSEEK_API_KEY"):
         print("\n[Skipped] Live LLM integration tests require DEEPSEEK_API_KEY.")
@@ -86,7 +87,7 @@ def run_live_llm_tests(schema_text):
     print("\n[Test 5] Testing NL-to-SQL Query: 'Show me top 3 customers from China by total order amount'...")
     state = create_initial_state("Show me top 3 customers from China by total order amount", schema_text)
 
-    res = graph.invoke(state)
+    res = await graph.ainvoke(state)
     print(" -> Logs printed by agent:")
     for log in res["logs"]:
         print(f"    * {log}")
@@ -105,7 +106,7 @@ def run_live_llm_tests(schema_text):
     print("\n[Test 6] Testing ML Forecast Query: 'Forecast unique visitors for the next 30 days'...")
     ml_state_forecast = create_initial_state("Forecast unique visitors for the next 30 days", schema_text)
 
-    res_fore = graph.invoke(ml_state_forecast)
+    res_fore = await graph.ainvoke(ml_state_forecast)
     print(" -> Logs printed by agent:")
     for log in res_fore["logs"]:
         print(f"    * {log}")
@@ -124,7 +125,7 @@ def run_live_llm_tests(schema_text):
     print("\n[Test 7] Testing ML Customer Segmentation: 'Group our customers using machine learning clustering'...")
     ml_state_seg = create_initial_state("Group our customers using machine learning clustering", schema_text)
 
-    res_seg = graph.invoke(ml_state_seg)
+    res_seg = await graph.ainvoke(ml_state_seg)
     print(" -> Logs printed by agent:")
     for log in res_seg["logs"]:
         print(f"    * {log}")
@@ -160,7 +161,7 @@ def run_tests():
 
     run_sql_safety_tests()
     run_ml_unit_tests(schema_text)
-    run_live_llm_tests(schema_text)
+    asyncio.run(run_live_llm_tests(schema_text))
 
     print("\n==================================================")
     print("🏁 ALL TESTS COMPLETED")
